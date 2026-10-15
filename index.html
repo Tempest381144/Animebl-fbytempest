@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Anime Blöf</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+  <style>
+    html, body { margin: 0; background: #030712; -webkit-tap-highlight-color: transparent; }
+    #boot { color: #9ca3af; font-family: sans-serif; text-align: center; padding-top: 40vh; }
+  </style>
+</head>
+<body>
+  <div id="root"><div id="boot">Yükleniyor...</div></div>
+  <noscript>Oyunu oynamak için JavaScript açık olmalı.</noscript>
+
+  <script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef } = React;
+
+// --- İKONLAR (lucide-react yerine dahili SVG) ---
+const Icon = ({ size = 24, className = '', fill = 'none', children }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill={fill}
+    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    {children}
+  </svg>
+);
+const Volume2 = (p) => <Icon {...p}><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><path d="M15.54 8.46a5 5 0 0 1 0 7.07" /><path d="M19.07 4.93a10 10 0 0 1 0 14.14" /></Icon>;
+const VolumeX = (p) => <Icon {...p}><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><line x1="22" x2="16" y1="9" y2="15" /><line x1="16" x2="22" y1="9" y2="15" /></Icon>;
+const Skull = (p) => <Icon {...p}><circle cx="9" cy="12" r="1" /><circle cx="15" cy="12" r="1" /><path d="M8 20v2h8v-2" /><path d="m12.5 17-.5-1-.5 1h1z" /><path d="M16 20a2 2 0 0 0 1.56-3.25 8 8 0 1 0-11.12 0A2 2 0 0 0 8 20" /></Icon>;
+const Play = (p) => <Icon {...p}><polygon points="6 3 20 12 6 21 6 3" /></Icon>;
+const AlertTriangle = (p) => <Icon {...p}><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" /><path d="M12 9v4" /><path d="M12 17h.01" /></Icon>;
+const Target = (p) => <Icon {...p}><circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="2" /></Icon>;
+
+
+// --- CONSTANTS ---
+// Kendi resimlerini kullanmak istersen dosyaları projenin public/ klasörüne koy ve yolunu yaz
+// (örn. rimuru: '/img/rimuru.jpg'). Boş bırakırsan oyundaki dahili çizimler kullanılır.
+const LOCAL_IMAGES = { rimuru: '', ichigo: '', subaru: '', simon: '', hisoka: '' };
+
+const CHARACTERS = [
+  { id: 'rimuru', name: 'Rimuru', count: 6, color: 'from-blue-500 to-blue-900' },
+  { id: 'ichigo', name: 'Ichigo', count: 6, color: 'from-orange-500 to-gray-900' },
+  { id: 'subaru', name: 'Subaru', count: 6, color: 'from-purple-600 to-gray-900' },
+  { id: 'simon', name: 'Simon', count: 6, color: 'from-green-500 to-yellow-800' },
+];
+
+const JOKER = { id: 'hisoka', name: 'Hisoka', count: 2, color: 'from-pink-500 to-purple-800', isJoker: true };
+
+const ALL_CARDS = [...CHARACTERS, JOKER];
+
+const BG_MUSIC_URL = "https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=lofi-study-112191.mp3";
+
+// --- HELPER FUNCTIONS ---
+const createDeck = () => {
+  let deck = [];
+  let idCounter = 0;
+  ALL_CARDS.forEach(char => {
+    for (let i = 0; i < char.count; i++) {
+      deck.push({ ...char, uniqueId: `card_${idCounter++}` });
+    }
+  });
+  // Shuffle
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [deck[i], deck[j]] = [deck[j], deck[i]];
+  }
+  return deck;
+};
+
+const getRandomCharacter = () => {
+  return CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)].id;
+};
+
+// --- DAHİLİ ÇİZİMLER (internet gerektirmez) ---
+const ART = {
+  rimuru: (<>
+    <ellipse cx="50" cy="128" rx="46" ry="22" fill="#38bdf8" opacity=".45" />
+    <path d="M20 66 Q18 26 50 24 Q82 26 80 66 L84 120 Q50 108 16 120Z" fill="#4cc3f7" />
+    <circle cx="50" cy="64" r="25" fill="#ffe8d2" />
+    <path d="M24 62 Q28 34 50 34 Q72 34 76 62 Q64 48 50 52 Q36 48 24 62Z" fill="#4cc3f7" />
+    <ellipse cx="40" cy="66" rx="4" ry="5.5" fill="#f5b400" /><ellipse cx="60" cy="66" rx="4" ry="5.5" fill="#f5b400" />
+    <circle cx="41" cy="65" r="1.6" fill="#111" /><circle cx="61" cy="65" r="1.6" fill="#111" />
+    <path d="M44 78 Q50 82 56 78" stroke="#b45309" strokeWidth="2" fill="none" strokeLinecap="round" />
+    <path d="M62 124 Q62 106 78 108 Q94 110 90 124Z" fill="#7dd3fc" />
+    <circle cx="74" cy="116" r="1.8" fill="#0c4a6e" /><circle cx="82" cy="116" r="1.8" fill="#0c4a6e" />
+  </>),
+  ichigo: (<>
+    <path d="M16 64 L24 26 L36 40 L44 14 L54 38 L66 16 L72 40 L86 28 L82 64Z" fill="#fb923c" />
+    <path d="M16 140 L22 108 Q50 96 78 108 L84 140Z" fill="#111827" />
+    <path d="M40 100 L50 118 L60 100Z" fill="#f9fafb" />
+    <circle cx="50" cy="64" r="24" fill="#ffddb8" />
+    <path d="M26 58 L32 40 L44 52 L50 38 L58 52 L70 40 L74 58 Q50 46 26 58Z" fill="#fb923c" />
+    <path d="M33 59 L45 64 M67 59 L55 64" stroke="#7c2d12" strokeWidth="2.6" strokeLinecap="round" />
+    <circle cx="40" cy="68" r="2.8" fill="#3b1d0a" /><circle cx="60" cy="68" r="2.8" fill="#3b1d0a" />
+    <path d="M43 79 Q50 76 57 79" stroke="#7c2d12" strokeWidth="2" fill="none" strokeLinecap="round" />
+  </>),
+  subaru: (<>
+    <path d="M16 140 L20 106 Q50 94 80 106 L84 140Z" fill="#16a34a" />
+    <path d="M44 98 L50 140 L56 98Z" fill="#fb923c" />
+    <circle cx="50" cy="64" r="24" fill="#ffe0c2" />
+    <path d="M25 62 Q22 30 50 28 Q78 30 75 62 Q70 44 56 46 L48 42 L40 48 Q30 46 25 62Z" fill="#1f2937" />
+    <ellipse cx="40" cy="67" rx="4.2" ry="3.4" fill="#fff" /><ellipse cx="60" cy="67" rx="4.2" ry="3.4" fill="#fff" />
+    <circle cx="40" cy="67" r="1.8" fill="#111" /><circle cx="60" cy="67" r="1.8" fill="#111" />
+    <path d="M34 60 L45 62 M66 60 L55 62" stroke="#111" strokeWidth="2.2" strokeLinecap="round" />
+    <path d="M43 78 Q50 83 57 78" stroke="#9a3412" strokeWidth="2" fill="none" strokeLinecap="round" />
+  </>),
+  simon: (<>
+    <path d="M16 140 L20 108 Q50 96 80 108 L84 140Z" fill="#b91c1c" />
+    <path d="M42 106 Q50 120 58 106" stroke="#facc15" strokeWidth="2" fill="none" />
+    <path d="M50 112 L55 126 L45 126Z" fill="#facc15" />
+    <circle cx="50" cy="64" r="24" fill="#f6d5b5" />
+    <path d="M22 58 L26 28 L38 40 L48 18 L58 38 L72 24 L76 40 L80 58 Q50 42 22 58Z" fill="#1e3a8a" />
+    <rect x="28" y="44" width="44" height="7" rx="3.5" fill="#f59e0b" />
+    <circle cx="38" cy="48" r="5.5" fill="#fde68a" stroke="#92400e" strokeWidth="1.5" /><circle cx="62" cy="48" r="5.5" fill="#fde68a" stroke="#92400e" strokeWidth="1.5" />
+    <circle cx="40" cy="68" r="2.8" fill="#111" /><circle cx="60" cy="68" r="2.8" fill="#111" />
+    <path d="M42 78 Q50 84 58 78" stroke="#9a3412" strokeWidth="2" fill="none" strokeLinecap="round" />
+  </>),
+  hisoka: (<>
+    <path d="M18 140 L22 108 Q50 96 78 108 L82 140Z" fill="#7e22ce" />
+    <path d="M40 100 L50 124 L60 100Z" fill="#fce7f3" />
+    <path d="M22 64 Q20 24 50 20 Q80 24 78 64 Q64 44 50 46 Q36 44 22 64Z" fill="#ef4444" />
+    <circle cx="50" cy="66" r="24" fill="#ffe2cf" />
+    <path d="M26 62 Q30 36 50 36 Q70 36 74 62 Q62 46 50 50 Q38 46 26 62Z" fill="#ef4444" />
+    <ellipse cx="40" cy="69" rx="3.6" ry="2.6" fill="#facc15" /><ellipse cx="60" cy="69" rx="3.6" ry="2.6" fill="#facc15" />
+    <path d="M33 66 Q40 62 46 67 M67 66 Q60 62 54 67" stroke="#111" strokeWidth="2" fill="none" strokeLinecap="round" />
+    <polygon points="33,72 34.4,76 38.5,76 35.2,78.4 36.4,82.4 33,80 29.6,82.4 30.8,78.4 27.5,76 31.6,76" fill="#a855f7" />
+    <path d="M66 74 q-3.5 5 0 7.5 q3.5 -2.5 0 -7.5z" fill="#ec4899" />
+    <path d="M42 81 Q52 87 61 78" stroke="#9f1239" strokeWidth="2" fill="none" strokeLinecap="round" />
+  </>),
+};
+
+function CharArt({ id }) {
+  return (
+    <svg viewBox="0 0 100 140" preserveAspectRatio="xMidYMid slice" className="w-full h-full block">
+      {ART[id]}
+    </svg>
+  );
+}
+
+// Önce LOCAL_IMAGES'taki resmi dener, yoksa/yüklenemezse dahili çizimi gösterir
+function CharImage({ id, name, className }) {
+  const [failed, setFailed] = useState(false);
+  const src = LOCAL_IMAGES[id];
+  if (src && !failed) {
+    return <img src={src} alt={name} onError={() => setFailed(true)} className={`${className} overflow-hidden`} />;
+  }
+  return <div className={`${className} overflow-hidden`}><CharArt id={id} /></div>;
+}
+
+const BOT_STYLE = {
+  Muhtar: { bg: '#1e3a8a', skin: '#f1c9a5', hair: '#6b7280', mustache: true },
+  'Kürek': { bg: '#14532d', skin: '#e8b88f', hair: '#7c2d12', cap: true },
+  Arap: { bg: '#7c2d12', skin: '#a8714a', hair: '#111827' },
+};
+
+function BotAvatar({ name, alive }) {
+  const b = BOT_STYLE[name] || BOT_STYLE.Muhtar;
+  return (
+    <svg viewBox="0 0 100 100" className={`w-10 h-10 sm:w-14 sm:h-14 rounded-full border bg-gray-800 ${alive ? 'border-blue-500' : 'border-red-600 grayscale'}`}>
+      <rect width="100" height="100" fill={b.bg} />
+      <path d="M8 100 Q50 66 92 100Z" fill="#374151" />
+      <circle cx="50" cy="52" r="26" fill={b.skin} />
+      <path d="M24 48 Q26 22 50 22 Q74 22 76 48 Q62 36 50 38 Q38 36 24 48Z" fill={b.hair} />
+      {b.cap && <path d="M22 42 Q50 6 78 42Z" fill="#facc15" />}
+      <circle cx="40" cy="54" r="3" fill="#111" /><circle cx="60" cy="54" r="3" fill="#111" />
+      <path d="M42 66 Q50 72 58 66" stroke="#111" strokeWidth="2" fill="none" strokeLinecap="round" />
+      {b.mustache && <path d="M38 63 Q50 58 62 63 Q50 67 38 63Z" fill={b.hair} />}
+    </svg>
+  );
+}
+
+// --- MAIN COMPONENT ---
+function AnimeBlofMobile() {
+  // GAME STATES
+  const [gameState, setGameState] = useState('START'); // START, PLAYING, ROULETTE, GAMEOVER
+  const [players, setPlayers] = useState([]);
+  const [turn, setTurn] = useState(0);
+  const [tablePile, setTablePile] = useState([]);
+  const [targetChar, setTargetChar] = useState(null);
+  const [lastPlay, setLastPlay] = useState(null);
+  const [logs, setLogs] = useState([]);
+  const [winner, setWinner] = useState(null);
+
+  // HUMAN UI STATES
+  const [selectedCards, setSelectedCards] = useState([]);
+
+  // ROULETTE STATE (phase: reveal -> spinning -> died/survived)
+  const [rouletteState, setRouletteState] = useState(null);
+
+  // AUDIO STATES
+  const [isAudioPlaying, setIsAudioPlaying] = useState(false);
+  const audioRef = useRef(null);
+
+  // --- AUDIO LOGIC ---
+  const toggleAudio = () => {
+    if (!audioRef.current) return;
+    if (isAudioPlaying) {
+      audioRef.current.pause();
+      setIsAudioPlaying(false);
+    } else {
+      audioRef.current.play().then(() => setIsAudioPlaying(true)).catch(console.error);
+    }
+  };
+
+  const addLog = (msg) => {
+    setLogs(prev => [...prev, `[${new Date().toLocaleTimeString('tr-TR', { hour12: false })}] ${msg}`].slice(-8));
+  };
+
+  // --- INIT GAME ---
+  const initGame = () => {
+    if (!audioRef.current) {
+      audioRef.current = new Audio(BG_MUSIC_URL);
+      audioRef.current.loop = true;
+      audioRef.current.volume = 0.3;
+    }
+
+    if (!isAudioPlaying) {
+      audioRef.current.play().then(() => setIsAudioPlaying(true)).catch(e => console.log("Audio prevented", e));
+    }
+
+    const deck = createDeck();
+    const newPlayers = [
+      { id: 0, name: 'Sen', isBot: false, isAlive: true, hand: [], chambers: 6 },
+      { id: 1, name: 'Muhtar', isBot: true, isAlive: true, hand: [], chambers: 6 },
+      { id: 2, name: 'Kürek', isBot: true, isAlive: true, hand: [], chambers: 6 },
+      { id: 3, name: 'Arap', isBot: true, isAlive: true, hand: [], chambers: 6 },
+    ];
+
+    // Initial Deal (26 cards among 4 players)
+    deck.forEach((card, idx) => {
+       newPlayers[idx % 4].hand.push(card);
+    });
+
+    setPlayers(newPlayers);
+    setTablePile([]);
+
+    const newTarget = getRandomCharacter();
+    setTargetChar(newTarget);
+
+    setLastPlay(null);
+    setTurn(0);
+    setSelectedCards([]);
+    setLogs([]);
+    setWinner(null);
+    setRouletteState(null);
+    setGameState('PLAYING');
+
+    const charName = CHARACTERS.find(c => c.id === newTarget).name;
+    addLog(`Oyun başladı! Masa: ${charName}`);
+  };
+
+  const getNextAlivePlayer = (currentTurn, currentPlayers) => {
+    let next = (currentTurn + 1) % 4;
+    let iterations = 0;
+    while (!currentPlayers[next].isAlive && iterations < 4) {
+      next = (next + 1) % 4;
+      iterations++;
+    }
+    return next;
+  };
+
+  const checkWinCondition = (currentPlayers) => {
+    const alivePlayers = currentPlayers.filter(p => p.isAlive);
+    if (alivePlayers.length === 1) {
+      setWinner(alivePlayers[0]);
+      setGameState('GAMEOVER');
+      return true;
+    }
+
+    const emptyHandPlayer = alivePlayers.find(p => p.hand.length === 0);
+    if (emptyHandPlayer && lastPlay?.playerId !== emptyHandPlayer.id) {
+      setWinner(emptyHandPlayer);
+      setGameState('GAMEOVER');
+      return true;
+    }
+    return false;
+  };
+
+  // --- ROULETTE & RESHUFFLE LOGIC ---
+  // reveal: yalan denildiğinde açılan kartların bilgisi (null olabilir)
+  const triggerRoulette = (playerId, currentPlayersState, reveal = null) => {
+    setGameState('ROULETTE');
+    const player = currentPlayersState[playerId];
+    const riskChances = player.chambers;
+
+    const startSpin = () => {
+      setRouletteState({
+        targetId: playerId,
+        phase: 'spinning',
+        reveal,
+        message: `${player.name} Rus Ruleti'ne giriyor... (1/${riskChances})`
+      });
+
+      setTimeout(() => {
+        const isDead = Math.floor(Math.random() * player.chambers) === 0;
+        let newPlayers = [...currentPlayersState];
+
+        if (isDead) {
+          setRouletteState({ targetId: playerId, phase: 'died', reveal, message: `BAM! ${player.name} elendi!` });
+          addLog(`BAM! ${player.name} Rus Ruleti'ni kaybetti ve öldü!`);
+          newPlayers[playerId].isAlive = false;
+          newPlayers[playerId].hand = [];
+        } else {
+          setRouletteState({ targetId: playerId, phase: 'survived', reveal, message: `KLİK! ${player.name} hayatta!` });
+          newPlayers[playerId].chambers = Math.max(1, newPlayers[playerId].chambers - 1);
+          addLog(`Klik! ${player.name} hayatta kaldı. Yeni şansı: 1/${newPlayers[playerId].chambers}.`);
+        }
+
+        setTimeout(() => {
+          setTablePile([]);
+          setLastPlay(null);
+          setRouletteState(null);
+
+          // RESHUFFLE EVERYTHING AMONG SURVIVORS
+          const aliveIds = newPlayers.filter(p => p.isAlive).map(p => p.id);
+
+          if (aliveIds.length > 0) {
+             newPlayers.forEach(p => p.hand = []);
+             const freshDeck = createDeck();
+             freshDeck.forEach((card, idx) => {
+                 const targetId = aliveIds[idx % aliveIds.length];
+                 newPlayers[targetId].hand.push(card);
+             });
+          }
+
+          const newTarget = getRandomCharacter();
+          setTargetChar(newTarget);
+          const newTargetName = CHARACTERS.find(c => c.id === newTarget).name;
+
+          addLog(`Kartlar sıfırlanıp yeniden dağıtıldı! Yeni Masa: ${newTargetName}`);
+
+          setPlayers(newPlayers);
+
+          if (!checkWinCondition(newPlayers)) {
+            setTurn(isDead ? getNextAlivePlayer(playerId, newPlayers) : playerId);
+            setGameState('PLAYING');
+          }
+        }, 3500);
+      }, 2000);
+    };
+
+    if (reveal) {
+      // Önce kartları göster, sonra ruleti başlat
+      setRouletteState({ targetId: playerId, phase: 'reveal', reveal, message: '' });
+      setTimeout(startSpin, 3200);
+    } else {
+      startSpin();
+    }
+  };
+
+  // --- PLAY CARDS LOGIC ---
+  const handlePlayCards = (playerId, cardIndices) => {
+    const player = players[playerId];
+    if (cardIndices.length === 0 || cardIndices.length > 3) return;
+    if (!targetChar) return;
+
+    const playedCards = cardIndices.map(idx => player.hand[idx]);
+    const newHand = player.hand.filter((_, idx) => !cardIndices.includes(idx));
+
+    const newPlayers = [...players];
+    newPlayers[playerId].hand = newHand;
+
+    setTablePile(prev => [...prev, ...playedCards]);
+    setLastPlay({
+      playerId,
+      cards: playedCards,
+      claimCount: playedCards.length
+    });
+
+    addLog(`${player.name}, masaya ${playedCards.length} kart sürdü.`);
+
+    setPlayers(newPlayers);
+    setSelectedCards([]);
+
+    if (!checkWinCondition(newPlayers)) {
+      setTurn(getNextAlivePlayer(playerId, newPlayers));
+    }
+  };
+
+  // --- BLUFF (YALAN) LOGIC ---
+  const handleCallBluff = (callerId) => {
+    if (!lastPlay) return;
+    const caller = players[callerId];
+    const targetPlayerId = lastPlay.playerId;
+    const targetPlayer = players[targetPlayerId];
+
+    addLog(`${caller.name}, ${targetPlayer.name}'e "YALAN!" dedi.`);
+
+    const isLying = lastPlay.cards.some(card => card.id !== targetChar && !card.isJoker);
+    const claimedName = CHARACTERS.find(c => c.id === targetChar).name;
+
+    let loserId;
+    if (isLying) {
+      addLog(`YAKALANDI! ${targetPlayer.name} yalan söylüyordu.`);
+      loserId = targetPlayerId;
+    } else {
+      addLog(`YANLIŞ TAHMİN! ${targetPlayer.name} doğru söylüyordu.`);
+      loserId = callerId;
+    }
+
+    addLog(`Açılan kartlar: ${lastPlay.cards.map(c => c.name).join(', ')}`);
+
+    // Bir önceki oyuncunun attığı kartlar herkese gösterilir
+    const reveal = {
+      cards: lastPlay.cards,
+      targetId: targetChar,
+      isLying,
+      title: `${targetPlayer.name}: "${lastPlay.claimCount} adet ${claimedName}" demişti`,
+      verdict: isLying
+        ? `YALAN! ${targetPlayer.name} blöf yapıyordu`
+        : `DOĞRU! ${targetPlayer.name} doğru söylüyordu`,
+    };
+
+    triggerRoulette(loserId, players, reveal);
+  };
+
+  // --- BOT AI ---
+  useEffect(() => {
+    if (gameState !== 'PLAYING') return;
+    const currentPlayer = players[turn];
+    if (!currentPlayer || !currentPlayer.isBot || !currentPlayer.isAlive) return;
+
+    const botTimer = setTimeout(() => {
+      // 1. Call Bluff Decision
+      if (lastPlay) {
+        const botHandCountOfTarget = currentPlayer.hand.filter(c => c.id === targetChar || c.isJoker).length;
+        const totalClaimed = lastPlay.claimCount;
+
+        let callChance = 0.08;
+        if (botHandCountOfTarget + totalClaimed > 6) {
+          callChance = 1.0;
+        } else if (botHandCountOfTarget >= 3) {
+          callChance = 0.45;
+        }
+
+        if (Math.random() < callChance) {
+          handleCallBluff(currentPlayer.id);
+          return;
+        }
+      }
+
+      // 2. Play Cards Decision
+      let cardsToPlayIndices = [];
+
+      currentPlayer.hand.forEach((c, idx) => {
+          if (cardsToPlayIndices.length < 3 && (c.id === targetChar || c.isJoker)) {
+              cardsToPlayIndices.push(idx);
+          }
+      });
+
+      if (cardsToPlayIndices.length === 0) {
+          const bluffCount = Math.floor(Math.random() * 2) + 1;
+          const availableIndices = currentPlayer.hand.map((_, i) => i);
+
+          for (let i = availableIndices.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [availableIndices[i], availableIndices[j]] = [availableIndices[j], availableIndices[i]];
+          }
+
+          for(let i = 0; i < Math.min(bluffCount, availableIndices.length); i++){
+               cardsToPlayIndices.push(availableIndices[i]);
+          }
+      }
+
+      handlePlayCards(currentPlayer.id, cardsToPlayIndices);
+
+    }, 1800);
+
+    return () => clearTimeout(botTimer);
+  }, [turn, gameState, players, lastPlay, targetChar]);
+
+  // --- UI RENDERERS ---
+  const renderCard = (card, index, isHidden = false, selectable = false, selected = false) => {
+    return (
+      <div
+        key={card?.uniqueId || index}
+        onClick={() => selectable && handleCardClick(index)}
+        className={`relative w-14 h-20 sm:w-20 sm:h-28 rounded-lg shadow-lg overflow-hidden cursor-pointer transition-transform duration-200 border shrink-0
+          ${isHidden ? 'bg-gray-800 border-gray-600' : `bg-gradient-to-br ${card.color} border-gray-500`}
+          ${selected ? 'transform -translate-y-3 border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.6)]' : 'hover:-translate-y-1'}
+        `}
+      >
+        {isHidden ? (
+           <div className="w-full h-full flex items-center justify-center bg-gray-900">
+             <span className="text-gray-500 text-sm font-black">?</span>
+           </div>
+        ) : (
+          <>
+            <CharImage
+              id={card.id}
+              name={card.name}
+              className="absolute inset-0 w-full h-full object-cover z-10"
+            />
+
+            <div className="absolute bottom-0 w-full p-1 text-center text-[9px] sm:text-[10px] font-black text-white bg-black/80 z-20 uppercase tracking-widest truncate">
+              {card.name}
+            </div>
+            {card.isJoker && (
+                <div className="absolute top-1 left-1 text-yellow-400 text-[8px] font-black bg-black/90 px-1 rounded z-20">JOKER</div>
+            )}
+          </>
+        )}
+      </div>
+    );
+  };
+
+  // Yalan denince açılan kart: masadaki karaktere uyuyorsa yeşil, uymuyorsa kırmızı
+  const renderRevealedCard = (card, i, targetId) => {
+    const ok = card.id === targetId || card.isJoker;
+    return (
+      <div
+        key={card.uniqueId || i}
+        className={`relative rounded-lg ring-2 transform scale-125 mx-2 ${ok ? 'ring-green-500' : 'ring-red-600'}`}
+      >
+        {renderCard(card, i)}
+        <div className={`absolute -top-2 -right-2 z-30 w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-black ${ok ? 'bg-green-500 text-black' : 'bg-red-600 text-white'}`}>
+          {ok ? '✓' : '✕'}
+        </div>
+      </div>
+    );
+  };
+
+  const handleCardClick = (index) => {
+    if (turn !== 0 || gameState !== 'PLAYING') return;
+    if (selectedCards.includes(index)) {
+      setSelectedCards(prev => prev.filter(i => i !== index));
+    } else {
+      if (selectedCards.length < 3) {
+        setSelectedCards(prev => [...prev, index]);
+      }
+    }
+  };
+
+  const humanPlay = () => {
+    if (selectedCards.length === 0 || selectedCards.length > 3) return;
+    handlePlayCards(0, selectedCards);
+  };
+
+  const targetCharObj = targetChar ? CHARACTERS.find(c => c.id === targetChar) : null;
+
+  return (
+    <div className="min-h-screen bg-gray-950 text-white font-sans relative overflow-hidden flex flex-col select-none max-w-md mx-auto sm:max-w-none shadow-2xl">
+
+      {/* Background Image Overlay */}
+      <div
+        className="absolute inset-0 z-0 opacity-15 pointer-events-none"
+        style={{ backgroundImage: 'radial-gradient(circle at 20% 15%, #7c3aed 0, transparent 45%), radial-gradient(circle at 80% 75%, #dc2626 0, transparent 45%)' }}
+      />
+      <div className="absolute inset-0 z-0 bg-gradient-to-b from-transparent via-black/70 to-black pointer-events-none"></div>
+
+      {/* Top Header */}
+      <header className="relative z-10 px-3 py-2 flex justify-between items-center bg-black/60 backdrop-blur-md border-b border-gray-800">
+        <h1 className="text-base sm:text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-red-500 via-purple-500 to-red-500 tracking-wider">
+          ANIME BLÖF
+        </h1>
+        <button onClick={toggleAudio} className="p-2 bg-gray-900 rounded-full hover:bg-gray-800 transition border border-gray-700">
+          {isAudioPlaying ? <Volume2 size={16} className="text-green-400" /> : <VolumeX size={16} className="text-red-500" />}
+        </button>
+      </header>
+
+      {/* Main Game Area */}
+      {gameState !== 'START' && (
+        <main className="flex-1 relative z-10 flex flex-col justify-between p-2 sm:p-4">
+
+          {/* Bots Area (Mobile Optimized Grid) */}
+          <div className="grid grid-cols-3 gap-2 mb-2">
+            {[1, 2, 3].map(botIdx => {
+                const bot = players[botIdx];
+                if (!bot) return null;
+                return (
+                    <div key={bot.id} className={`flex flex-col items-center p-2 rounded-lg bg-gray-900/90 border ${turn === bot.id ? 'border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.4)] scale-105' : 'border-gray-800'} transition-all duration-300 relative`}>
+                      <div className="relative mb-1">
+                        <BotAvatar name={bot.name} alive={bot.isAlive} />
+                        {!bot.isAlive && <Skull className="absolute -top-2 -right-2 text-red-600 bg-black rounded-full p-0.5" size={20} />}
+                      </div>
+                      <span className="font-black text-[11px] sm:text-xs text-gray-200 uppercase truncate w-full text-center">{bot.name}</span>
+                      <span className="text-[9px] text-gray-400">{bot.isAlive ? `${bot.hand.length} Kart` : 'Öldü'}</span>
+                      {bot.isAlive && (
+                         <span className="text-[8px] text-red-400 font-bold bg-red-950/80 px-1.5 py-0.5 rounded mt-0.5 border border-red-900">
+                           1/{bot.chambers}
+                         </span>
+                      )}
+                    </div>
+                )
+            })}
+          </div>
+
+          {/* Table Center */}
+          <div className="flex-1 flex flex-col items-center justify-center my-1">
+
+            {/* System Target Banner */}
+            {targetCharObj && (
+              <div className="mb-3 flex flex-col items-center">
+                <div className="bg-red-600 text-white text-[9px] font-black tracking-widest px-4 py-0.5 rounded-t-md shadow">
+                  İSTENEN MASA
+                </div>
+                <div className="flex items-center gap-2 bg-gray-900/90 px-4 py-2 rounded-lg rounded-t-none border border-red-900/60 shadow-lg backdrop-blur-sm">
+                  <Target size={18} className="text-red-500 animate-pulse" />
+                  <CharImage
+                    id={targetCharObj.id}
+                    name={targetCharObj.name}
+                    className="w-8 h-8 rounded-full border border-red-500 object-cover"
+                  />
+                  <span className="text-sm sm:text-xl font-black uppercase text-white tracking-wider">{targetCharObj.name}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Play Pile Circle */}
+            <div className="relative w-32 h-32 sm:w-48 sm:h-48 rounded-full border border-gray-700 bg-gray-900/50 flex flex-col items-center justify-center shadow-inner backdrop-blur-sm">
+              {tablePile.length > 0 ? (
+                <>
+                  <div className="relative w-14 h-20 sm:w-20 sm:h-28">
+                    {[...Array(Math.min(tablePile.length, 5))].map((_, i) => (
+                       <div key={i} className="absolute inset-0" style={{ transform: `rotate(${i * 6}deg) translate(${i * 2}px, ${i * 2}px)` }}>
+                         {renderCard(null, i, true)}
+                       </div>
+                    ))}
+                  </div>
+                  <div className="absolute -bottom-3 bg-black/90 px-3 py-0.5 rounded-full border border-gray-600 text-[10px] font-black text-yellow-400 shadow">
+                     {tablePile.length} KART
+                  </div>
+                </>
+              ) : (
+                <span className="text-gray-500 text-[10px] sm:text-xs font-bold uppercase tracking-widest">Masa Boş</span>
+              )}
+            </div>
+
+          </div>
+
+          {/* Human Hand & Controls */}
+          <div className="w-full flex flex-col items-center mt-auto">
+
+            {/* Status & Action Buttons */}
+            <div className="w-full flex justify-between items-center bg-gray-900/90 p-2.5 rounded-t-xl border-t border-x border-gray-800 gap-2 backdrop-blur-md">
+              <div className="flex flex-col">
+                {turn === 0 ? (
+                  <span className="text-green-400 font-black text-xs sm:text-sm uppercase tracking-wider animate-pulse">Sıra Sende!</span>
+                ) : (
+                  <span className="text-gray-400 text-xs uppercase">Sıra: <span className="text-white font-bold">{players[turn]?.name}</span></span>
+                )}
+                {players[0] && players[0].isAlive && (
+                  <span className="text-[10px] text-red-400 font-bold flex items-center gap-1 mt-0.5">
+                    <Skull size={12} /> Ölüm Riski: 1/{players[0].chambers}
+                  </span>
+                )}
+              </div>
+
+              <div className="flex gap-2">
+                {turn === 0 && tablePile.length > 0 && lastPlay && lastPlay.playerId !== 0 && (
+                   <button
+                     onClick={() => handleCallBluff(0)}
+                     className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white font-black rounded-lg shadow text-xs uppercase flex items-center gap-1"
+                   >
+                     <AlertTriangle size={14} /> YALAN!
+                   </button>
+                )}
+
+                {turn === 0 && (
+                   <button
+                     onClick={humanPlay}
+                     disabled={selectedCards.length === 0}
+                     className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-800 disabled:text-gray-500 text-white font-black rounded-lg shadow text-xs uppercase"
+                   >
+                     AT {selectedCards.length > 0 && `(${selectedCards.length})`}
+                   </button>
+                )}
+              </div>
+            </div>
+
+            {/* Human Hand Cards */}
+            <div className={`w-full bg-black/95 p-3 flex justify-center gap-1.5 overflow-x-auto min-h-[110px] sm:min-h-[150px] border-t border-gray-800 ${players[0] && !players[0].isAlive ? 'opacity-30 pointer-events-none' : ''}`}>
+              {players[0]?.hand.map((card, idx) =>
+                 renderCard(card, idx, false, turn === 0, selectedCards.includes(idx))
+              )}
+            </div>
+          </div>
+
+          {/* Mini Logs Box */}
+          <div className="absolute top-12 left-2 right-2 max-h-20 overflow-y-auto bg-black/80 p-2 rounded text-[9px] text-gray-300 font-mono border border-gray-800 pointer-events-none z-30 hidden sm:block">
+            {logs.map((l, i) => <div key={i}>{l}</div>)}
+          </div>
+
+        </main>
+      )}
+
+      {/* START MODAL */}
+      {gameState === 'START' && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-xl p-4">
+          <div className="bg-gray-900 border border-gray-700 p-6 rounded-2xl max-w-sm w-full text-center shadow-2xl relative">
+            <h2 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-br from-red-500 via-purple-500 to-pink-500 mb-3 uppercase tracking-wider">
+              Anime Blöf
+            </h2>
+
+            <div className="text-gray-300 mb-6 text-xs space-y-2 text-left bg-black/60 p-3 rounded-lg border border-gray-800">
+              <p>• Masa hangi karakteri derse o atılır.</p>
+              <p>• Elinde yoksa blöf yapmak zorundasın.</p>
+              <p>• "Yalan" denince atılan kartlar açılır.</p>
+              <p>• Yalan yakalanırsa <strong>Rus Ruleti</strong> (1/6) başlar.</p>
+              <p>• Hayatta kalırsan risk daralır (1/5) ve kartlar tamamen yeniden dağıtılır.</p>
+              <p>• <strong>Hisoka</strong> Joker'dir.</p>
+            </div>
+
+            <button
+              onClick={initGame}
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-red-600 to-purple-700 hover:from-red-500 hover:to-purple-600 disabled:bg-gray-800 disabled:text-gray-500 text-white font-black text-sm shadow flex items-center justify-center gap-2 uppercase tracking-widest"
+            >
+              <><Play size={18} fill="currentColor" /> OYUNA BAŞLA</>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* REVEAL + ROULETTE MODAL */}
+      {gameState === 'ROULETTE' && rouletteState && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-xl p-4">
+          <div className="text-center w-full flex flex-col items-center gap-6">
+
+            {/* Açılan kartlar (yalan denildiyse) */}
+            {rouletteState.reveal && (
+              <div className="flex flex-col items-center gap-3">
+                <p className="text-[11px] text-gray-300 font-bold">{rouletteState.reveal.title}</p>
+                <div className="flex justify-center py-3">
+                  {rouletteState.reveal.cards.map((card, i) =>
+                    renderRevealedCard(card, i, rouletteState.reveal.targetId)
+                  )}
+                </div>
+                {rouletteState.phase === 'reveal' && (
+                  <h2 className={`text-base font-black uppercase tracking-wider animate-pulse ${rouletteState.reveal.isLying ? 'text-red-500' : 'text-green-400'}`}>
+                    {rouletteState.reveal.verdict}
+                  </h2>
+                )}
+              </div>
+            )}
+
+            {rouletteState.phase === 'spinning' && (
+                <div className="flex flex-col items-center animate-pulse">
+                   <Skull size={70} className="text-red-600 mb-4 animate-spin" />
+                   <h2 className="text-lg font-black text-red-500 uppercase tracking-wider">{rouletteState.message}</h2>
+                </div>
+            )}
+            {rouletteState.phase === 'died' && (
+                <div className="flex flex-col items-center animate-bounce">
+                   <Skull size={90} className="text-red-700 mb-4" />
+                   <h2 className="text-xl font-black text-red-600 uppercase tracking-wider bg-black p-4 rounded-xl border border-red-700">{rouletteState.message}</h2>
+                </div>
+            )}
+            {rouletteState.phase === 'survived' && (
+                <div className="flex flex-col items-center">
+                   <div className="w-16 h-16 rounded-full border-2 border-green-500 flex items-center justify-center mb-4 bg-green-900/30">
+                      <span className="text-green-500 text-3xl font-bold">✓</span>
+                   </div>
+                   <h2 className="text-lg font-black text-green-400 uppercase tracking-wider">{rouletteState.message}</h2>
+                </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* GAME OVER MODAL */}
+      {gameState === 'GAMEOVER' && winner && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-xl p-4">
+          <div className="bg-gray-900 border border-yellow-500 p-6 rounded-2xl max-w-sm w-full text-center shadow-2xl">
+            <h2 className="text-3xl font-black text-yellow-400 mb-4 uppercase tracking-widest">Oyun Bitti!</h2>
+            <div className="text-base text-white mb-6 bg-black p-4 rounded-xl border border-gray-700">
+              <span className="text-gray-400 text-xs font-bold block mb-1">KAZANAN</span>
+              <span className="font-black text-yellow-300 text-2xl uppercase">{winner.name}</span>
+            </div>
+            <button
+              onClick={initGame}
+              className="w-full py-3 rounded-xl bg-white text-black hover:bg-gray-200 font-black text-sm uppercase tracking-widest shadow"
+            >
+              YENİDEN OYNA
+            </button>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+}
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<AnimeBlofMobile />);
+  </script>
+</body>
+</html>
